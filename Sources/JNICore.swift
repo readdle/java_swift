@@ -57,6 +57,10 @@ open class JNICore {
 
     open var threadKey: pthread_t { return pthread_self() }
 
+    open var errorLogger: (_ message: String) -> Void = { message in
+        NSLog(message)
+    }
+
     open var env: UnsafeMutablePointer<JNIEnv?>? {
         let currentThread = threadKey
         if let env = envCache[currentThread] {
@@ -81,9 +85,16 @@ open class JNICore {
     }
 
     open func report( _ msg: String, _ file: StaticString = #file, _ line: Int = #line ) {
-        NSLog( "\(msg) - at \(file):\(line)" )
-        if api?.ExceptionCheck( env ) != 0 {
-            api.ExceptionDescribe( env )
+        errorLogger( "\(msg) - at \(file):\(line)" )
+        if let throwable: jthrowable = ExceptionCheck() {
+            let throwable = Throwable(javaObject: throwable)
+            let className = throwable.className()
+            let message = throwable.getMessage()
+            errorLogger("\(className): \(message ?? "unavailable")")
+            if let lastStackTrace = throwable.lastStackTraceString() {
+                errorLogger("\(lastStackTrace)")
+            }
+            throwable.printStackTrace()
         }
     }
 
@@ -264,12 +275,13 @@ open class JNICore {
         for local in locals.pointee {
             DeleteLocalRef( local )
         }
-        if api.ExceptionCheck( env ) != 0, let throwable: jthrowable = api.ExceptionOccurred( env ) {
-            report( "Exception occured", file, line )
-            thrownLock.lock()
-            thrownCache[threadKey] = throwable
-            thrownLock.unlock()
-            api.ExceptionClear( env )
+        if api.ExceptionCheck( env ) != 0 {
+            if let throwable: jthrowable = api.ExceptionOccurred( env ) {
+                thrownLock.lock()
+                thrownCache[threadKey] = throwable
+                thrownLock.unlock()
+                api.ExceptionClear(env)
+            }
         }
         return result
     }
@@ -287,8 +299,15 @@ open class JNICore {
 
     open func ExceptionReset() {
         if let throwable: jthrowable = ExceptionCheck() {
-            report( "Left over exception" )
-            Throwable( javaObject: throwable ).printStackTrace()
+            errorLogger( "Left over exception" )
+            let throwable = Throwable(javaObject: throwable)
+            let className = throwable.className()
+            let message = throwable.getMessage()
+            errorLogger("\(className): \(message ?? "unavailable")")
+            if let lastStackTrace = throwable.lastStackTraceString() {
+                errorLogger("\(lastStackTrace)")
+            }
+            throwable.printStackTrace()
         }
     }
 
