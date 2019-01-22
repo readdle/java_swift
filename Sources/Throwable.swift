@@ -315,6 +315,19 @@ open class Throwable: JavaObject, /* interface java.io.Serializable */ Unavailab
         return className
     }
 
+    public func stackTraceString() -> String {
+        var stackTrace = ""
+        if let stackTraces = getStackTrace() {
+            for trace in stackTraces {
+                if let traceString = trace.toString() {
+                    stackTrace += "\n\(traceString)"
+                }
+            }
+        }
+        stackTrace += "\n"
+        return stackTrace
+    }
+
     public func lastStackTraceString() -> String? {
         guard let stackTraces = getStackTrace(), let firstTrace = stackTraces.first else {
             return nil

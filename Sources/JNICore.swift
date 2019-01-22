@@ -90,10 +90,8 @@ open class JNICore {
             let throwable = Throwable(javaObject: throwable)
             let className = throwable.className()
             let message = throwable.getMessage()
-            errorLogger("\(className): \(message ?? "unavailable")")
-            if let lastStackTrace = throwable.lastStackTraceString() {
-                errorLogger("\(lastStackTrace)")
-            }
+            let stackTrace = throwable.stackTraceString()
+            errorLogger("\(className): \(message ?? "unavailable")\(stackTrace)")
             throwable.printStackTrace()
         }
     }
@@ -303,10 +301,8 @@ open class JNICore {
             let throwable = Throwable(javaObject: throwable)
             let className = throwable.className()
             let message = throwable.getMessage()
-            errorLogger("\(className): \(message ?? "unavailable")")
-            if let lastStackTrace = throwable.lastStackTraceString() {
-                errorLogger("\(lastStackTrace)")
-            }
+            let stackTrace = throwable.stackTraceString()
+            errorLogger("\(className): \(message ?? "unavailable")\(stackTrace)")
             throwable.printStackTrace()
         }
     }
