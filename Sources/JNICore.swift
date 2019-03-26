@@ -11,6 +11,7 @@
 
 import Foundation
 import Dispatch
+import Glibc
 
 @_exported import CJavaVM
 
@@ -19,10 +20,14 @@ public func JNI_OnLoad( jvm: UnsafeMutablePointer<JavaVM?>, ptr: UnsafeRawPointe
     JNI.jvm = jvm
     let env: UnsafeMutablePointer<JNIEnv?>? = JNI.GetEnv()
     JNI.api = env!.pointee!.pointee
-    JNI.envCache[JNI.threadKey] = env
-#if os(Android)
-    DispatchQueue.setThreadDetachCallback( JNI_DetachCurrentThread )
-#endif
+
+    let result = withUnsafeMutablePointer(to: &jniEnvKey, {
+        pthread_key_create($0, JNI_DetachCurrentThread)
+    })
+    if (result != 0) {
+        fatalError("Can't pthread_key_create")
+    }
+    pthread_setspecific(jniEnvKey, env)
     
     // Save ContextClassLoader for FindClass usage
     // When a thread is attached to the VM, the context class loader is the bootstrap loader.
@@ -37,14 +42,12 @@ public func JNI_OnLoad( jvm: UnsafeMutablePointer<JavaVM?>, ptr: UnsafeRawPointe
     return jint(JNI_VERSION_1_6)
 }
 
-public func JNI_DetachCurrentThread() {
+public func JNI_DetachCurrentThread(_ ptr: UnsafeMutableRawPointer?) {
     _ = JNI.jvm?.pointee?.pointee.DetachCurrentThread( JNI.jvm )
-    JNI.envLock.lock()
-    JNI.envCache[JNI.threadKey] = nil
-    JNI.envLock.unlock()
 }
 
 public let JNI = JNICore()
+fileprivate var jniEnvKey = pthread_key_t()
 
 open class JNICore {
 
@@ -52,25 +55,21 @@ open class JNICore {
     open var api: JNINativeInterface_!
     open var classLoader: jclass!
 
-    open var envCache = [pthread_t:UnsafeMutablePointer<JNIEnv?>?]()
-    fileprivate let envLock = NSLock()
-
-    open var threadKey: pthread_t { return pthread_self() }
+    open var threadKey: pid_t { return gettid() }
 
     open var errorLogger: (_ message: String) -> Void = { message in
         NSLog(message)
     }
 
     open var env: UnsafeMutablePointer<JNIEnv?>? {
-        let currentThread = threadKey
-        if let env = envCache[currentThread] {
-            return env
+        if let env: UnsafeMutableRawPointer = pthread_getspecific(jniEnvKey) {
+            return env.assumingMemoryBound(to: JNIEnv?.self)
         }
-
         let env = AttachCurrentThread()
-        envLock.lock()
-        envCache[currentThread] = env
-        envLock.unlock()
+        let error = pthread_setspecific(jniEnvKey, env)
+        if error != 0 {
+            NSLog("Can't save env to pthread_setspecific")
+        }
         return env
     }
 
@@ -169,11 +168,7 @@ open class JNICore {
     }
 
     private func autoInit() {
-        envLock.lock()
-        if envCache.isEmpty && !initJVM() {
-            report( "Auto JVM init failed" )
-        }
-        envLock.unlock()
+
     }
 
     open func background( closure: @escaping () -> () ) {
@@ -263,7 +258,7 @@ open class JNICore {
         }
     }
 
-    private var thrownCache = [pthread_t: jthrowable]()
+    private var thrownCache = [pid_t: jthrowable]()
     private let thrownLock = NSLock()
 
     open func check<T>( _ result: T, _ locals: UnsafeMutablePointer<[jobject]>, removeLast: Bool = false, _ file: StaticString = #file, _ line: Int = #line ) -> T {
@@ -285,7 +280,7 @@ open class JNICore {
     }
 
     open func ExceptionCheck() -> jthrowable? {
-        let currentThread: pthread_t = threadKey
+        let currentThread: pid_t = threadKey
         if let throwable: jthrowable = thrownCache[currentThread] {
             thrownLock.lock()
             thrownCache.removeValue(forKey: currentThread)
