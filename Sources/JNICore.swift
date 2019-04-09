@@ -30,12 +30,11 @@ public func JNI_OnLoad( jvm: UnsafeMutablePointer<JavaVM?>, ptr: UnsafeRawPointe
     pthread_setspecific(jniEnvKey, env)
 
     result = withUnsafeMutablePointer(to: &jniFatalMessage, {
-        pthread_key_create($0, JNI_DetachCurrentThread)
+        pthread_key_create($0, JNI_RemoveFatalMessage)
     })
     if (result != 0) {
         fatalError("Can't pthread_key_create")
     }
-    pthread_setspecific(jniFatalMessage, env)
     
     // Save ContextClassLoader for FindClass usage
     // When a thread is attached to the VM, the context class loader is the bootstrap loader.
@@ -346,7 +345,8 @@ open class JNICore {
         guard let ptr: UnsafeMutableRawPointer = pthread_getspecific(jniFatalMessage) else {
             return nil
         }
-        return Unmanaged<FatalErrorMessage>.fromOpaque(ptr).takeUnretainedValue().description
+        let fatalErrorMessage = Unmanaged<FatalErrorMessage>.fromOpaque(ptr).takeUnretainedValue()
+        return "\(fatalErrorMessage.description) at \(fatalErrorMessage.file):\(fatalErrorMessage.line)"
     }
 
 }
