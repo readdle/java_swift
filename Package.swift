@@ -1,3 +1,4 @@
+// swift-tools-version:4.0
 //
 //  Package.swift
 //  SwiftJava
@@ -10,7 +11,19 @@ import PackageDescription
 
 let package = Package(
     name: "java_swift",
+    products: [
+        .library(
+            name: "java_swift",
+            targets: ["java_swift"]
+        )
+    ],
     dependencies: [
-        .Package(url: "https://github.com/SwiftJava/CJavaVM.git", "1.1.3"),
-        ]
+        .package(url: "https://github.com/readdle/CJavaVM.git", .exact("2.4.1")),
+    ],
+    targets: [
+        .target(
+            name: "java_swift",
+            path: "Sources"
+        )
+    ]
 )
