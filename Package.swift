@@ -25,5 +25,6 @@ let package = Package(
             name: "java_swift",
             path: "Sources"
         )
-    ]
+    ],
+    swiftLanguageVersions: [5, 4]
 )
