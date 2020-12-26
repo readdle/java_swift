@@ -11,7 +11,17 @@
 
 import Foundation
 import Dispatch
-import Glibc
+
+#if os(Android)
+    import Glibc
+    public typealias thread_id = pid_t
+#elseif os(Windows)
+    public typealias thread_id = DWORD
+    import WinSDK
+#elseif canImport(Darwin)
+    public typealias thread_id = mach_port_t
+    import Darwin
+#endif
 
 @_exported import CJavaVM
 
@@ -61,14 +71,12 @@ fileprivate class FatalErrorMessage {
     }
 }
 
-public func JNI_DetachCurrentThread(_ ptr: UnsafeMutableRawPointer?) {
+public func JNI_DetachCurrentThread(_ ptr: UnsafeMutableRawPointer) {
     _ = JNI.jvm?.pointee?.pointee.DetachCurrentThread( JNI.jvm )
 }
 
-public func JNI_RemoveFatalMessage(_ ptr: UnsafeMutableRawPointer?) {
-    if let ptr = ptr {
-        Unmanaged<FatalErrorMessage>.fromOpaque(ptr).release()
-    }
+public func JNI_RemoveFatalMessage(_ ptr: UnsafeMutableRawPointer) {
+    Unmanaged<FatalErrorMessage>.fromOpaque(ptr).release()
 }
 
 public let JNI = JNICore()
@@ -81,7 +89,15 @@ open class JNICore {
     open var api: JNINativeInterface_!
     open var classLoader: jclass!
 
-    open var threadKey: pid_t { return gettid() }
+    open var threadKey: thread_id { 
+        #if os(Android)
+            return gettid()
+        #elseif os(Windows)
+            return GetCurrentThreadId()
+        #else
+            return pthread_mach_thread_np(pthread_self())
+        #endif
+    }
 
     open var errorLogger: (_ message: String) -> Void = { message in
         NSLog(message)
@@ -119,60 +135,6 @@ open class JNICore {
             errorLogger("\(className): \(message ?? "unavailable")\(stackTrace)")
             throwable.printStackTrace()
         }
-    }
-
-    open func initJVM( options: [String]? = nil, _ file: StaticString = #file, _ line: Int = #line ) -> Bool {
-#if os(Android)
-        return true
-#else
-        if jvm != nil {
-            report( "JVM can only be initialised once", file, line )
-            return true
-        }
-
-        var options: [String]? = options
-        if options == nil {
-            var classpath: String = String( cString: getenv("HOME") )+"/.swiftjava.jar"
-            if let CLASSPATH: UnsafeMutablePointer<Int8> = getenv( "CLASSPATH" ) {
-                classpath += ":"+String( cString: CLASSPATH )
-            }
-            options = ["-Djava.class.path="+classpath,
-                       // add to bootclasspath as threads not started using Thread class
-                       // will not have the correct classloader and be missing classpath
-                       "-Xbootclasspath/a:"+classpath]
-        }
-
-        var vmOptions = [JavaVMOption]( repeating: JavaVMOption(), count: options?.count ?? 1 )
-
-        return withUnsafeMutablePointer(to: &vmOptions[0]) {
-            (vmOptionsPtr) in
-            var vmArgs = JavaVMInitArgs()
-            vmArgs.version = jint(JNI_VERSION_1_6)
-            vmArgs.nOptions = jint(options?.count ?? 0)
-            vmArgs.options = vmOptionsPtr
-
-            if let options: [String] = options {
-                for i in 0..<options.count {
-                    options[i].withCString {
-                        (cString) in
-                        vmOptions[i].optionString = strdup( cString )
-                    }
-                }
-            }
-
-            var tenv: UnsafeMutablePointer<JNIEnv?>?
-            if withPointerToRawPointer(to: &tenv, {
-                JNI_CreateJavaVM( &self.jvm, $0, &vmArgs )
-            } ) != jint(JNI_OK) {
-                report( "JNI_CreateJavaVM failed", file, line )
-                return false
-            }
-
-            self.envCache[threadKey] = tenv
-            self.api = self.env!.pointee!.pointee
-            return true
-        }
-#endif
     }
 
     private func withPointerToRawPointer<T, Result>(to arg: inout T, _ body: @escaping (UnsafeMutablePointer<UnsafeMutableRawPointer?>) throws -> Result) rethrows -> Result {
@@ -213,9 +175,12 @@ open class JNICore {
     open func FindClass( _ name: UnsafePointer<Int8>, _ file: StaticString = #file, _ line: Int = #line ) -> jclass? {
         autoInit()
         ExceptionReset()
+
+        let className = String(cString: name)
+        let fixedClassName = className.replacingOccurrences(of: "/", with: ".")
         
         var locals = [jobject]()
-        var args = [jvalue(l: String(cString: name).localJavaObject(&locals))]
+        var args = [jvalue(l: fixedClassName.localJavaObject(&locals))]
         let clazz: jclass? = JNIMethod.CallObjectMethod(object: classLoader,
                                                         methodName: "loadClass",
                                                         methodSig: "(Ljava/lang/String;)Ljava/lang/Class;",
@@ -225,11 +190,6 @@ open class JNICore {
         
         if clazz == nil {
             report( "Could not find class \(String( cString: name ))", file, line )
-            if strncmp( name, "org/swiftjava/", 14 ) == 0 {
-                report( "\n\nLooking for a swiftjava proxy class required for event listeners and Runnable's to work.\n" +
-                    "Have you copied https://github.com/SwiftJava/SwiftJava/blob/master/swiftjava.jar to ~/.swiftjava.jar " +
-                    "and/or set the CLASSPATH environment variable?\n" )
-            }
         }
         return clazz
     }
@@ -284,7 +244,7 @@ open class JNICore {
         }
     }
 
-    private var thrownCache = [pid_t: jthrowable]()
+    private var thrownCache = [thread_id: jthrowable]()
     private let thrownLock = NSLock()
 
     open func check<T>( _ result: T, _ locals: UnsafeMutablePointer<[jobject]>, removeLast: Bool = false, _ file: StaticString = #file, _ line: Int = #line ) -> T {
@@ -306,7 +266,7 @@ open class JNICore {
     }
 
     open func ExceptionCheck() -> jthrowable? {
-        let currentThread: pid_t = threadKey
+        let currentThread: thread_id = threadKey
         if let throwable: jthrowable = thrownCache[currentThread] {
             thrownLock.lock()
             thrownCache.removeValue(forKey: currentThread)
