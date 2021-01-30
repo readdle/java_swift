@@ -12,7 +12,7 @@
 import Foundation
 import Dispatch
 
-#if os(Android)
+#if os(Android) || os(Linux)
     import Glibc
     public typealias thread_id = pid_t
 #elseif os(Windows)
@@ -71,7 +71,7 @@ fileprivate class FatalErrorMessage {
     }
 }
 
-public func JNI_DetachCurrentThread(_ ptr: UnsafeMutableRawPointer) {
+public func JNI_DetachCurrentThread(_ ptr: UnsafeMutableRawPointer?) {
     _ = JNI.jvm?.pointee?.pointee.DetachCurrentThread( JNI.jvm )
 }
 
