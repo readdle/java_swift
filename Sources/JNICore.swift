@@ -71,13 +71,25 @@ fileprivate class FatalErrorMessage {
     }
 }
 
+#if os(Linux)
 public func JNI_DetachCurrentThread(_ ptr: UnsafeMutableRawPointer?) {
+    _ = JNI.jvm?.pointee?.pointee.DetachCurrentThread( JNI.jvm )
+}
+
+public func JNI_RemoveFatalMessage(_ ptr: UnsafeMutableRawPointer?) {
+    if let ptr = ptr {
+        Unmanaged<FatalErrorMessage>.fromOpaque(ptr).release()
+    }
+}
+#else
+public func JNI_DetachCurrentThread(_ ptr: UnsafeMutableRawPointer) {
     _ = JNI.jvm?.pointee?.pointee.DetachCurrentThread( JNI.jvm )
 }
 
 public func JNI_RemoveFatalMessage(_ ptr: UnsafeMutableRawPointer) {
     Unmanaged<FatalErrorMessage>.fromOpaque(ptr).release()
 }
+#endif
 
 public let JNI = JNICore()
 fileprivate var jniEnvKey = pthread_key_t()
@@ -90,7 +102,7 @@ open class JNICore {
     open var classLoader: jclass!
 
     open var threadKey: thread_id { 
-        #if os(Android)
+        #if os(Android) || os(Linux)
             return gettid()
         #elseif os(Windows)
             return GetCurrentThreadId()
