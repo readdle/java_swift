@@ -18,7 +18,7 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/readdle/CJavaVM.git", .exact("2.4.1")),
+        .package(url: "https://github.com/readdle/CJavaVM.git", .exact("2.4.2")),
     ],
     targets: [
         .target(
