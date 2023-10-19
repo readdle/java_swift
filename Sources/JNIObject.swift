@@ -41,21 +41,6 @@ extension JNIObjectProtocol {
 public protocol JavaProtocol: JNIObjectProtocol {
 }
 
-public protocol UnavailableProtocol: JavaProtocol {
-}
-
-open class UnavailableProtocolForward: JNIObjectForward, UnavailableProtocol  {
-}
-
-open class UnavailableObject: JavaObject, Error {
-}
-
-open class UnavailableEnum: JavaEnum {
-}
-
-extension Throwable: Error {
-}
-
 open class JNIObject: JNIObjectProtocol, JNIObjectInit {
 
     private var _javaObject: jobject?
@@ -229,104 +214,5 @@ extension JNIType {
 
     public static func toJava( value: JNIObjectProtocol?, mapClass: String, locals: UnsafeMutablePointer<[jobject]> ) -> jvalue {
         return jvalue( l: value?.localJavaObject( locals ) )
-    }
-
-    public static func toJava( value: [String: JNIObjectProtocol]?, mapClass: String, locals: UnsafeMutablePointer<[jobject]> ) -> jvalue {
-        guard let value: [String: JNIObjectProtocol] = value else { return jvalue( l: nil ) }
-
-        var classCache: jclass?
-        var methodID: jmethodID?
-        var __locals = [jobject]()
-        var __args = [jvalue]( repeating: jvalue(), count: 1 )
-        guard let __object: jobject = JNIMethod.NewObject( className: mapClass, classCache: &classCache,
-                  methodSig: "()V", methodCache: &methodID, args: &__args, locals: &__locals ) else {
-            JNI.report( "Unable to create HashMap of class \(mapClass)" )
-            return jvalue( l: nil )
-        }
-
-        JNI.api.DeleteGlobalRef( JNI.env, classCache )
-
-        let map = HashMap( javaObject: __object )
-        for (key, item) in value {
-            var sublocals = [jobject]()
-            let javaKey = JavaObject( javaObject: toJava( value: key, locals: &sublocals ).l )
-            let javaItem = JavaObject( javaObject: toJava( value: item, locals: &sublocals ).l )
-            _ = map.put( javaKey, javaItem )
-            for local in sublocals {
-                JNI.DeleteLocalRef( local )
-            }
-        }
-
-        locals.pointee.append( __object )
-        return jvalue( l: __object )
-    }
-
-    public static func toJava( value: [String: [JNIObjectProtocol]]?, mapClass: String, locals: UnsafeMutablePointer<[jobject]> ) -> jvalue {
-        guard let value: [String: [JNIObjectProtocol]] = value else { return jvalue( l: nil ) }
-
-        var classCache: jclass?
-        var methodID: jmethodID?
-        var __args = [jvalue]( repeating: jvalue(), count: 1 )
-        var __locals = [jobject]()
-        guard let __object: jobject = JNIMethod.NewObject( className: mapClass, classCache: &classCache,
-                  methodSig: "()V", methodCache: &methodID, args: &__args, locals: &__locals ) else {
-            JNI.report( "Unable to create HashMap of class \(mapClass)" )
-            return jvalue( l: nil )
-        }
-
-        JNI.api.DeleteGlobalRef( JNI.env, classCache )
-
-        let map: HashMap = HashMap( javaObject: __object )
-        for (key, item) in value {
-            var sublocals = [jobject]()
-            let javaKey = JavaObject( javaObject: toJava( value: key, locals: &sublocals ).l )
-            let javaItem = JavaObject( javaObject: toJava( value: item, locals: &sublocals ).l )
-            _ = map.put( javaKey, javaItem )
-            for local in sublocals {
-                JNI.DeleteLocalRef( local )
-            }
-        }
-
-        locals.pointee.append( __object )
-        return jvalue( l: __object )
-    }
-
-    public static func toSwift<T: JNIObjectInit>( type: [String: T].Type, from: jobject?, consume: Bool = true ) -> [String: T]? {
-        guard let from: jobject = from else { return nil }
-        defer { if consume { JNI.DeleteLocalRef( from ) } }
-        let map = HashMap( javaObject: from )
-        var out = [String:T]()
-        for key in map.keySet().toArray() {
-            key.withJavaObject {
-                keyObject in
-                map.get(key).withJavaObject {
-                    itemObject in
-                    if let keystr: String = JNIType.toSwift( type: String.self, from: keyObject, consume: false ) {
-                        out[keystr] = T( javaObject: itemObject )
-                    }
-                }
-            }
-        }
-        return out
-    }
-
-    public static func toSwift<T: JNIObjectInit>( type: [String: [T]].Type, from: jobject?, consume: Bool = true ) -> [String: [T]]? {
-        guard let from: jobject = from else { return nil }
-        defer { if consume { JNI.DeleteLocalRef( from ) } }
-        let map = HashMap( javaObject: from )
-        var out = [String:[T]]()
-        for key in map.keySet().toArray() {
-            key.withJavaObject {
-                keyObject in
-                map.get(key).withJavaObject {
-                    itemObject in
-                    if let keystr: String = JNIType.toSwift( type: String.self, from: keyObject, consume: false ),
-                        let value: [T] = JNIType.toSwift( type: [T].self, from: itemObject, consume: false ) {
-                        out[keystr] = value
-                    }
-                }
-            }
-        }
-        return out
     }
 }

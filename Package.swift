@@ -18,7 +18,7 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/readdle/CJavaVM.git", .exact("2.4.1")),
+        .package(url: "https://github.com/readdle/swift-android-ndk.git", .exact("1.1.3")),
     ],
     targets: [
         .target(

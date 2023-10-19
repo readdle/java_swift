@@ -13,7 +13,7 @@ import Foundation
 import Dispatch
 import Glibc
 
-@_exported import CJavaVM
+@_exported import CAndroidNDK
 
 @_silgen_name("JNI_OnLoad")
 public func JNI_OnLoad( jvm: UnsafeMutablePointer<JavaVM?>, ptr: UnsafeRawPointer ) -> jint {
@@ -78,7 +78,7 @@ fileprivate var jniFatalMessage = pthread_key_t()
 open class JNICore {
 
     open var jvm: UnsafeMutablePointer<JavaVM?>?
-    open var api: JNINativeInterface_!
+    open var api: JNINativeInterface!
     open var classLoader: jclass!
 
     open var threadKey: pid_t { return gettid() }
@@ -101,9 +101,8 @@ open class JNICore {
 
     open func AttachCurrentThread() -> UnsafeMutablePointer<JNIEnv?>? {
         var tenv: UnsafeMutablePointer<JNIEnv?>?
-        if withPointerToRawPointer(to: &tenv, {
-            self.jvm?.pointee?.pointee.AttachCurrentThread( self.jvm, $0, nil )
-        } ) != jint(JNI_OK) {
+        let result = self.jvm?.pointee?.pointee.AttachCurrentThread( self.jvm, &tenv, nil )
+        if result != jint(JNI_OK) {
             report( "Could not attach to background jvm" )
         }
         return tenv
