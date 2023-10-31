@@ -30,26 +30,6 @@ open class Throwable {
         return __return != nil ? String( javaObject: __return ) : nil
     }
 
-    open func getStackTrace() -> [String] {
-        var __locals = [jobject]()
-        var __args = [jvalue]( repeating: jvalue(), count: 1 )
-        guard let stackTraces = JNIMethod.CallObjectMethod( object: javaObject, methodName: "getStackTrace", methodSig: "()[Ljava/lang/StackTraceElement;", methodCache: &Throwable.getStackTrace_MethodID_11, args: &__args, locals: &__locals ) else {
-            return []
-        }
-        defer { JNI.DeleteLocalRef(stackTraces) }
-        let length: jsize = JNI.api.GetArrayLength(JNI.env, stackTraces)
-        var result = [String]()
-        for index in 0 ..< length {
-            let stackTrace = JNI.api.GetObjectArrayElement(JNI.env, stackTraces, index)
-            guard let jstring = JNIMethod.CallObjectMethod(object: stackTrace, methodName: "toString", methodSig: "()Ljava/lang/String;", methodCache: &Throwable.toString_MethodID_9, args: &__args, locals: &__locals) else {
-                continue
-            }
-            defer { JNI.DeleteLocalRef(jstring) }
-            result.append(String(javaObject: jstring))
-        }
-        return result
-    }
-
     open func printStackTrace() {
         var __locals = [jobject]()
         var __args = [jvalue]( repeating: jvalue(), count: 1 )
@@ -69,13 +49,7 @@ open class Throwable {
     }
 
     public func stackTraceString() -> String {
-        var stackTrace = ""
-        let stackTraces = getStackTrace() 
-        for trace in stackTraces {
-            stackTrace += "\n\(trace)"
-        }
-        stackTrace += "\n"
-        return stackTrace
+        return "" // no stack trace here
     }
 
     public func lastStackTraceString() -> String? {
