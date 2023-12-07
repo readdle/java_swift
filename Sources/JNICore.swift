@@ -306,10 +306,12 @@ open class JNICore {
 
     open func ExceptionCheck() -> jthrowable? {
         let currentThread: pid_t = threadKey
-        if let throwable: jthrowable = thrownCache[currentThread] {
-            thrownLock.lock()
-            thrownCache.removeValue(forKey: currentThread)
+        thrownLock.lock()
+        defer {
             thrownLock.unlock()
+        }
+        if let throwable: jthrowable = thrownCache[currentThread] {
+            thrownCache.removeValue(forKey: currentThread)
             return throwable
         }
         return nil
