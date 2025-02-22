@@ -18,13 +18,17 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/readdle/swift-android-ndk.git", .exact("1.1.3")),
+        .package(url: "https://github.com/readdle/swift-android-ndk.git", .exact("1.1.4")),
     ],
     targets: [
         .target(
             name: "java_swift",
+            dependencies: [
+                .product(name: "AndroidNDK", package: "swift-android-ndk"),
+            ],
             path: "Sources"
         )
     ],
     swiftLanguageVersions: [5, 4]
 )
+

@@ -11,7 +11,14 @@
 
 import Foundation
 import Dispatch
+
+#if canImport(Android)
+import Android
+#endif
+
+#if canImport(Glibc)
 import Glibc
+#endif
 
 @_exported import CAndroidNDK
 
